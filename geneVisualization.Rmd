@@ -1,0 +1,158 @@
+---
+title: "Gene visualization plots"
+output:
+  pdf_document: default
+  html_document: default
+date: "2023-05-24"
+---
+```{r setup, include=FALSE }
+library(tidyverse)
+library(formattable)
+source("~/exportPlot.R")
+source("~/extractGene.R")
+```
+# Positions for our genes of interest
+```{r, genes}
+##define gene positions 
+pdtaR = 551158:551946
+fas = 1374717:1384266
+pgl = 1489748:1490570
+nrdD = 371367:373821
+##including upstream variants
+dps = 40000:40535
+xfp = 574226:580497
+pdtaS = 1087411:1088896
+ulaA = 954376:955762
+genes <- c(dps, pdtaR, fas, pgl, pdtaS, xfp, nrdD, ulaA)
+```
+
+```{r, echo= FALSE, include=FALSE}
+#experimental data - biofilm only
+experimental_snps <- read_csv("~/2023.04.19_Final_alleleTrajectories/2023.07.03_convergentHits.csv") %>% filter(!(grepl("2022-04-12", ID)))  %>% mutate(strain = case_when(grepl("GV2", ID) ~ "GV2", grepl("14018", ID) ~ "14018")) %>% rename(position = "pos", info = "INFO") %>% filter(condition == "Biofilm")
+
+#population data
+snpEff <- read_tsv("~/2023.01.17_snpCounts_popoolation/snpCounts/snpEff.tsv", skip= 8) %>% 
+  select(POS, INFO) %>%
+  rename("position"= POS, "info" = INFO)
+
+#counts
+snp_counts <- read.delim("~/2023.01.17_snpCounts_popoolation/gapless_SNPcounts_perPosition.txt") 
+
+#colony morphotype data
+dps_colony_morph <- read_csv("~/2023.04.19_Final_alleleTrajectories/dps_colony_morphotype_variants.csv") %>% mutate(type= gsub("colony_morph", "colony morphotype", type))
+
+fas_colony_morph <-  read_csv("~/2023.04.19_Final_alleleTrajectories/fas_colony_morphotype.csv") %>% mutate(strain = as.character(strain), type= gsub("colony_morph", "colony morphotype", type))
+
+954876
+
+```
+
+
+
+```{r, include=FALSE}
+experimental_snps_count <- experimental_snps %>% group_by(position, info, gene) %>%
+  summarise(num = n())
+experimental_snps_count$type <- "experiment"
+
+##filter and divide into fas and dps
+experimental_dps <- filter(experimental_snps_count, position %in% dps)
+experimental_fas <- filter(experimental_snps_count, position %in% fas)
+experimental_xfp <- filter(experimental_snps_count, position %in% xfp)
+```
+
+
+```{r, echo= FALSE, include=FALSE}
+#modify population data
+population = left_join(snpEff, snp_counts) %>% select(position, info, num)
+population$type <- "natural"
+
+gene <- extractGene(population)
+population$gene <- gene
+
+fas_population <- population %>% filter(position %in% fas)
+dps_population <- population %>% filter(position %in% dps)
+xfp_population <- population %>% filter(position %in% xfp)
+
+#combine
+dps_plot <- rbind(experimental_dps, dps_population, dps_colony_morph) 
+fas_plot <- rbind(experimental_fas, fas_population, fas_colony_morph)
+xfp_plot <- rbind(experimental_xfp, xfp_population) 
+
+#make a new column 'variant' which shows the consequence of each variant as read in from info
+dps_plot$variant <- case_when(
+  grepl("synonymous_variant", dps_plot$info) ~ "synonymous",
+  grepl("frameshift_variant", dps_plot$info) & grepl("missense_variant", dps_plot$info) ~ "frameshift variant, missense",
+  grepl("frameshift_variant", dps_plot$info) ~ "frameshift variant",
+  grepl("missense_variant", dps_plot$info) ~ "missense",
+  grepl("stop_gained", dps_plot$info) ~ "stop gained",
+  grepl("start_lost", dps_plot$info) ~ "start lost",
+  grepl("upstream_gene_variant", dps_plot$info) ~ "upstream gene variant",
+  TRUE ~ NA
+)
+
+fas_plot$variant <- case_when(
+  grepl("synonymous_variant", fas_plot$info) ~ "synonymous", 
+  grepl("frameshift_variant", fas_plot$info) & grepl("missense_variant", fas_plot$info) ~ "frameshift variant, missense",
+  grepl("frameshift_variant", fas_plot$info) ~ "frameshift variant",
+  grepl("missense_variant", fas_plot$info) ~ "missense",
+  grepl("stop_gained", fas_plot$info) ~ "stop gained",
+  grepl("start_lost", fas_plot$info) ~ "start lost",
+  grepl("upstream_gene_variant", fas_plot$info) ~ "upstream gene variant",
+  TRUE ~ NA
+)
+
+xfp_plot$variant <- case_when(
+  grepl("synonymous_variant", xfp_plot$info) ~ "synonymous",
+  grepl("frameshift_variant", xfp_plot$info) & grepl("missense_variant", xfp_plot$info) ~ "frameshift variant, missense",
+  grepl("frameshift_variant", xfp_plot$info) ~ "frameshift variant",
+  grepl("missense_variant", xfp_plot$info) ~ "missense",
+  grepl("stop_gained", xfp_plot$info) ~ "stop gained",
+  grepl("start_lost", xfp_plot$info) ~ "start lost",
+  grepl("upstream_gene_variant", xfp_plot$info) ~ "upstream gene variant",
+  TRUE ~ NA
+)
+
+```
+
+
+```{r, echo= FALSE, include=FALSE}
+dps_plot$type <- as.factor(dps_plot$type)
+dps_plot_expanded <- dps_plot[rep(rownames(dps_plot), dps_plot$num), ] %>% filter(gene == "dps")
+fas_plot_expanded <- fas_plot[rep(rownames(fas_plot), fas_plot$num), ]
+xfp_plot_expanded <- xfp_plot[rep(rownames(xfp_plot), xfp_plot$num), ] %>% filter(gene == "xfp")
+
+```
+
+# dps plot 
+```{r, echo=FALSE}
+dps_palette <- c("#F8766D", "grey30", "#00BFC4", "#C77CFF")
+fas_palette <- c("#F8766D",  "#00BFC4")
+xfp_palette <- c("#F8766D",  "#00BFC4", "#C77CFF")
+
+dpsp <- ggplot(dps_plot_expanded, aes(position, fill= variant)) + geom_histogram(position = "stack", binwidth = 5) + theme_bw() + facet_wrap(~type, dir = "v", scales= "free_y") + ggtitle("dps biofilm binwidth= 5") + theme_bw() + theme(text=element_text(size=14), legend.title = element_blank()) + scale_fill_manual(labels= c("missense", "stop gained", "synonymous", "upstream gene variant"), values= dps_palette)
+dpsp
+
+fasp <- ggplot(fas_plot_expanded, aes(position, fill= variant)) + facet_wrap(~type, dir = "v", scales="free_y") + geom_histogram(position = "stack", binwidth = 100) + theme_bw()  + ggtitle("fas biofilm binwidth= 100") + theme_bw() + theme(text=element_text(size=14), axis.title = element_text(size= 14), legend.title = element_blank()) 
+fasp
+
+xfpp <- ggplot(xfp_plot_expanded, aes(position, fill= variant)) + geom_histogram(position = "stack", binwidth = 25) + theme_bw() + facet_wrap(~type, dir = "v", scales= "free_y") + ggtitle("xfp biofilm") + theme_bw() + theme(text=element_text(size=14), legend.title = element_blank()) + scale_fill_manual(labels= c( "missense", "synonymous", "upstream gene variant"), values= xfp_palette)
+
+ulaAp <- ggplot(xfp_plot_expanded, aes(position, fill= variant)) + geom_histogram(position = "stack", binwidth = 25) + theme_bw() + facet_wrap(~type, dir = "v", scales= "free_y") + ggtitle("xfp biofilm") + theme_bw() + theme(text=element_text(size=14), legend.title = element_blank()) + scale_fill_manual(labels= c( "missense", "synonymous", "upstream gene variant"), values= xfp_palette)
+
+#ExportPlot(xfpp, "~/2023.04.19_Final_alleleTrajectories/xfp_plot_geneOnly", height = 5, width = 8)
+#ExportPlot(dpsp, "~/2023.04.19_Final_alleleTrajectories/dpsplot_max", height = 5, width = 8)
+
+```
+
+# proportion of total variants in the natural population only 
+```{r, echo=FALSE}
+fas_natural_proportion <- fas_plot_expanded %>% filter(type== "natural")
+
+ggplot(fas_natural_proportion, aes(position, fill = variant)) +
+  geom_histogram(aes(y = (after_stat(count) / sum(after_stat(count))) * 100), position = "stack", binwidth = 200) +
+  theme_bw() +
+  ggtitle("fas natural population") +
+  theme_bw() +
+  theme(text = element_text(size = 20), axis.title = element_text(size = 14), legend.title = element_blank()) +
+  scale_fill_manual(labels = c("missense", "synonymous"), values = fas_palette) + ylab("% of total variants")
+```
