@@ -1,0 +1,130 @@
+---
+title: "alleleTrajectory"
+output: html_document
+date: "2023-05-21"
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+
+source("~/exportPlot.R")
+
+##define gene positions 
+dps = 40000:40535
+pdtaR = 551158:551946
+ulaA =  954376:955762
+fas = 1374718:1384266
+pgl = 1489749:1490570
+pdtaS = 1087411:1088896
+xfp = 574225:576703 
+nrdD =  371367:373821
+
+genes <- c(dps, pdtaR, ulaA, fas, pgl, pdtaS, xfp, nrdD)
+```
+
+
+```{r, function}
+##function to make plots for each individual population 
+process_csv_files <- function(directory_path) {
+  csv_files <- list.files(path = directory_path, pattern = "\\.csv$", full.names = TRUE)
+  
+  for (csv_file in csv_files) {
+    data <- read_csv(csv_file)
+    columns <- colnames(data)
+    passage_levels <- c()
+    
+    if ("5" %in% columns) {
+      passage_levels <- c("Anc", "5", "10")
+    }
+  
+    if ("6" %in% columns) {
+      passage_levels <- c("Anc", "0", "5", "6", "8", "9", "10")
+    }
+    
+     if ("7" %in% columns) {
+      passage_levels <- c("Anc", "7")
+    }
+    
+    if (!("5" %in% columns) && !("6" %in% columns)) {
+      passage_levels <- c("Anc", "10")
+    }
+    
+    print(passage_levels)
+    
+    data_processed <- data %>%
+      gather(key = "passage", value = "frequency", all_of(passage_levels)) %>%
+      mutate(passage = factor(passage, levels = passage_levels),
+             pos = factor(pos), 
+             annot = case_when(
+               pos %in% dps ~ "dps", 
+               pos %in% pdtaR ~ "pdtaR",
+               pos %in% fas ~ "fas",
+               pos %in% pgl ~ "pgl",
+               pos %in% gavg_0720_0721 ~ "gavg_0720_0721",
+               TRUE ~ annot ))
+                                                            
+    filename <- tools::file_path_sans_ext(basename(csv_file))
+    
+    plot <- ggplot(data_processed, aes(passage, frequency, color = annot)) +
+      geom_point() +
+      geom_path(aes(group = pos)) +
+      theme_bw() +
+      ggtitle(filename) + theme(legend.text =  element_text(size = 8))
+    
+    print(plot)
+    
+    ggsave(filename = paste0(directory_path, "/", filename, ".png"), plot, width = 8, height = 4)
+  }
+}
+```
+
+
+```{r}
+generate_gene_plot <- function(sampleID, filePath, passage_levels) {
+   # Read CSV file
+  file <- read_csv(filePath)
+  
+  # Gather data
+  file_gathered <- file %>%
+    gather(key = "Passage", value = "Frequency", passage_levels) %>%
+    mutate(
+      Passage = factor(Passage, levels = passage_levels),
+      pos = factor(pos),
+      annot = case_when(
+        pos %in% dps ~ "dps",
+        pos %in% pdtaR ~ "pdtaR",
+        pos %in% fas ~ "fas",
+        pos %in% pgl ~ "pgl",
+        pos %in% ulaA ~ "ulaA",
+        pos %in% nrdD ~ "nrdD",
+        pos %in% pdtaS ~ "pdtaS",
+        pos %in% xfp ~ "xfp",
+        TRUE ~ annot
+      )
+    )
+  
+  # Filter to only genes of interest, and omit NA values
+  file_gathered <- na.omit(file_gathered) #%>% filter(pos %in% genes)
+  
+  # Plot
+  plot <- ggplot(file_gathered, aes(Passage, Frequency, color = annot)) +
+    geom_path(aes(group = pos)) +
+    theme_classic() + ggtitle(sampleID)
+  
+  # Export plot
+   ExportPlot(plot, paste0(Path, sampleID), height = 5, width = 7)
+}
+```
+
+```{r}
+# Usage
+sampleID <- "POOL_2021-10-03-"
+Path <- "~/2023.05.21_alleleTrajectoryFigures/14018_POOL_Biofilm_filt30/"
+
+passage_levels <- c("Anc", "7")
+filePath <- paste0(Path, sampleID, "_popoolation_withAnnot.csv")
+
+generate_gene_plot(sampleID, filePath, passage_levels)
+
+```
+
