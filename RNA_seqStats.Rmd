@@ -1,0 +1,181 @@
+---
+title: "RNA_seq_stats"
+output: html_document
+---
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir = '/Users/madelinetopf/2023.01.18_RNA_seq/')
+library(DESeq2)
+require(dplyr)
+require(ggplot2)
+require(vsn)
+require(RColorBrewer)
+require(pheatmap)
+require(apeglm)
+require(genefilter)
+require(hexbin)
+require(pvclust)
+require(scatterplot3d)
+require(viridis)
+require(beeswarm)
+require(ggpubr)
+```
+
+
+
+
+
+```{r}
+setwd('/Users/madelinetopf/2023.01.18_RNA_seq/')
+#####
+# Analysis of RNAseq data using DESeq2 from HTSeq count files.
+# Requires: metadatafile, HTSeq count files 
+#####
+
+# get metadata file from working directory. see example metadata file for formatting
+
+sampleData <- read.delim("~/2023.01.18_RNA_seq/rna_metadata.txt", sep="", header = TRUE)
+
+#sampleData <- read.delim("~/Downloads/2022_allRNA_metadata.txt")
+
+test <- read.delim("~/2023.01.18_RNA_seq/SRR3355340_HTSeqCounts_1.txt", sep= "\t", header = FALSE)
+
+# reformat input metadata into table -- you will need to change these based on your experiment
+sampleTable <- data.frame(SampleName = sampleData$LibraryName,
+                          CountsFile = sampleData$CountsFile,
+                          Type = factor(sampleData$Type),
+                          Strain = factor(sampleData$Strain),
+                          Genotype = factor(sampleData$Genotype),
+                          Condition = factor(sampleData$Condition,levels = c("Planktonic","Biofilm")),
+                          Clade = factor(sampleData$Clade),
+                          SampleID = sampleData$SampleID)
+                          
+
+# create DESeq2 object from sample table, experiment "design" is the independent variable you want to compare
+# expression between (in this case the variable is Condition, ie Biofilm vs Planktonic)
+DESeq2Table <- DESeqDataSetFromHTSeqCount(sampleTable = sampleTable, design = ~ Condition)
+
+# remove genes from table which have 0 expression counts across all samples
+DESeq2Table <- DESeq2Table[rowSums(counts(DESeq2Table)) > 1,]
+
+# run DESeq2 analysis
+DESeq2Table <- DESeq(DESeq2Table)
+
+# result names of analysis will be based on the design you specified above
+resultsNames(DESeq2Table)
+
+# get results from DESeq object
+# contrast specifies direction of comparison: 
+# (variable name, type 1, type 2) = type 1 vs type 2
+# (variable name, type 2, type 1) = type 2 vs type 1
+result <- results(DESeq2Table, alpha = 0.05, lfcThreshold = 0, contrast=c("Condition","Biofilm","Planktonic"))
+```
+
+
+```{r}
+# number of genes with significant (adjusted) p values
+sum(result$padj <0.05, na.rm=TRUE)
+
+# write all results to csv
+write.csv("allGenes.csv",x=result)
+
+# subset results to only significantly differentially expressed genes
+subset <- subset(result,padj<0.05)
+
+# write only significant results to csv
+write.csv("DEGenes.csv",x=subset)
+
+# log transform gene expression counts
+rld <- rlogTransformation(DESeq2Table, blind=FALSE)
+
+# pca plot of log-transformed counts
+# "intgroup" specifies what variable to color the points by
+pca.plot <- DESeq2::plotPCA(rld, intgroup=c("Condition")) +
+  theme_minimal()+ scale_color_manual(name="Growth Condition",values=c("#150E37FF","#D1426FFF"),
+                                      breaks=c("Biofilm","Planktonic"))
+pca.plot
+
+ExportPlot(pca.plot,"Figures/PCA",width=6,height=4)
+```
+
+```{r}
+# heatmap of all genes
+my_colors <- magma(n=4, end = 0.8, begin=0.1) # colors for sample types on heatmap
+condition <- my_colors[c(1,3)]
+names(condition) <- c("Biofilm","Planktonic")
+anno_colors <- list(Condition=condition)
+
+BvPCounts <- assay(rld)[rownames(result),] # get log transformed counts for all genes
+BvPCounts <- BvPCounts - rowMeans(BvPCounts) # normalize expression counts to the mean expression across all samples
+anno <- as.data.frame(colData(rld)[c("Condition")])
+
+custom.palette <- c("red","white","blue") # color palette for heatmap
+colors <- colorRampPalette(rev(custom.palette))(20)
+
+
+de.heatmap <- pheatmap(BvPCounts, color = colors, show_rownames = F, annotation_col = anno,show_colnames = F, 
+                       cutree_cols = 2,treeheight_row = 0, annotation_colors = anno_colors,
+                       kmeans_k = NA, border_color = NA, scale= "column", fontsize = 12)
+
+de.heatmap
+
+ExportPlot(de.heatmap,"Figures/AllGenes_heatmap",width=8,height=10)
+
+# heatmap of significantly DE genes only
+my_colors <- magma(n=4, end = 0.8, begin=0.1) # colors for sample types on heatmap
+condition <- my_colors[c(1,3)]
+names(condition) <- c("Biofilm","Planktonic")
+anno_colors <- list(Condition=condition)
+
+BvPCounts <- assay(rld)[rownames(subset),] # get log transformed counts for only significant genes
+BvPCounts <- BvPCounts - rowMeans(BvPCounts) # normalize expression counts to the mean expression across all samples
+anno <- as.data.frame(colData(rld)[c("Condition")])
+
+custom.palette <- c("red","white","blue") # color palette for heatmap
+colors <- colorRampPalette(rev(custom.palette))(20)
+
+
+de.heatmap.sig <- pheatmap(BvPCounts, color = colors, show_rownames = F, annotation_col = anno,show_colnames = F, 
+                       cutree_cols = 2,treeheight_row = 0, annotation_colors = anno_colors,
+                       kmeans_k = NA, border_color = NA, scale= "column", fontsize = 12)
+
+de.heatmap.sig
+
+ExportPlot(de.heatmap.sig,"Figures/DEGenes_heatmap",width=8,height=10)
+```
+
+```{r}
+# volcano plot
+voldata <- data.frame(result)
+voldata <- voldata %>% mutate(sig=case_when(padj < 0.05 & log2FoldChange > 0 ~ "Significant-Up",
+                                            padj < 0.05 & log2FoldChange < 0 ~ "Significant-Down",
+                                            padj > 0.05 ~ "Not significant"))
+
+custom.palette <- colorRampPalette(rev(c("red","white","blue")))(20)
+my_colors <- c("grey",custom.palette[15],custom.palette[5])
+
+vol <- ggplot(voldata,aes(x=log2FoldChange,y=-log10(padj))) + geom_point(aes(color=sig),alpha=0.8) + 
+  theme_minimal()+xlim(-11,11)+scale_color_manual(name=NULL,values=my_colors,
+                                                  breaks=c("Not significant","Significant-Up","Significant-Down"),
+                                                  labels=c("Not significant","Upregulated","Downregulated"))+
+  theme(legend.position = "top")
+
+vol
+
+ExportPlot(vol,"Figures/BvP_volcano",width=6,height=6)
+
+
+ExportPlot <- function(gplot, filename, width=2, height=1.5) {
+  # Export plot in PDF and EPS.
+  # Notice that A4: width=11.69, height=8.27
+  ggsave(paste(filename, '.pdf', sep=""), gplot, width = width, height = height)
+  postscript(file = paste(filename, '.eps', sep=""), width = width, height = height, family = "sans")
+  print(gplot)
+  dev.off()
+  png(file = paste(filename, '_.png', sep=""), width = width * 100, height = height * 100)
+  print(gplot)
+  #dev.off()
+```
+
