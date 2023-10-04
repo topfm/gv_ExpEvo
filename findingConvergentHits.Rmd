@@ -1,0 +1,94 @@
+---
+title: "findingConvergentHits"
+output: html_document
+date: "2023-06-29"
+---
+
+
+```{r setup, include=FALSE}
+library(tidyverse)
+```
+
+
+##this script inputs the pooled and single seq data and outputs a list of hits which occur more than one time in a gene. Hits that occur in the same strain in both pooled and single sequencing are filtered out. 
+
+#Note that the data directory is hard-coded and should be modified.
+
+assumptions: 
+- hits that occur in the same strain and both pooled and single seq should be filtered out.
+- a hit is counted if it changes in allele frequency by >10% 
+- filters out all deletions.
+
+```{r, include= FALSE, echo = FALSE}
+##setup
+library(tidyverse)
+
+data_dir = "~/2023.04.19_Final_alleleTrajectories/Allele_frequency/"
+data_list <- fs::dir_ls(data_dir, regexp = ".csv$")
+
+#return a single data frame
+my_data <- data_list %>% 
+    purrr::map_dfr(read_csv, show_col_types = FALSE, .id = "source") %>% 
+    dplyr::mutate(source = stringr::str_replace(source, "file/path", ""))
+```
+
+```{r reading, include=FALSE}
+#add columns to specify the type of data: pooled or single sequencing, the strain of each entry (gv2 or 14018), and the growth condition (biofilm or planktonic)
+freq <-  my_data %>% mutate(type = case_when(grepl("POOL", ID) ~ "pool", TRUE ~ "single"), strain = case_when(grepl("GV2", ID) ~ "GV2", grepl("GV14018", ID) ~ "GV14018"), condition = case_when(grepl("Biofilm", source) ~ "Biofilm", grepl("Planktonic", source) ~ "Planktonic"))
+
+#select the columns I want
+freq <- freq %>% select(pos, ID, ref, alt, INFO, Anc, "0", "5", "6", "7", "8","9", "10", annot, strain, condition, type)
+                        
+# Clean up ID column
+freq$ID <- gsub("POOL_", "", freq$ID)
+freq$ID <- gsub("Ssapro", "", freq$ID)
+
+#remove deletions
+freq <- freq %>% filter(alt != "DEL")
+#write_csv(freq, "~/2023.04.19_Final_alleleTrajectories/2023.10.03_allHits.csv")
+  
+# Concatenate hits so that if a hit appears at the same position in both POOL and Single data, it is only counted one time.
+freqs_filtered <- freq[!duplicated(freq[, c("pos", "ID")]), ]
+
+#remove the column with "pool" and "single" since now it's pretty useless.
+freqs_filtered$type <- NULL
+
+##parse the snpEff results to get a gene list that is simpler
+split_info <- strsplit(freqs_filtered$INFO, "\\|") 
+fourth_element <- sapply(split_info, "[[", 4)
+gene <- as.character(fourth_element)
+freqs_filtered$gene <- gene
+
+
+##only keep entries which have more than one occurance in our experiment. This removes all trajectories that only happen once.
+hits <- freqs_filtered %>% filter(duplicated(gene) | duplicated(gene, fromLast = TRUE)) 
+hits$pos <- as.numeric(hits$pos)
+
+
+#write_csv(freqs_filtered, "~/2023.04.19_Final_alleleTrajectories/2023.10.03_concatenatedHits.csv")
+```
+
+Hits where the ancestor is invariant.
+No hits went from freq = 100 to freq = 0
+```{r}
+#remove entries where the ancestor is not invariant. 
+#rename our fas gene from hypothetical protein to fas.
+#count up all the hits within the same strain (GV2 or 14018) and Condition (biofilm or planktonic)
+start <- hits %>% filter(Anc == 100 | Anc == 0) %>% 
+  group_by(gene, strain, condition) %>% 
+  mutate(strain_condition_hit_count= n()) %>% 
+  mutate(gene = gsub("DPDCJFFM_01065", "fas", gene))
+
+#rename passage numbers
+fixed <- start %>% rename(P0 = '0', P5 = '5', P6 = '6', P7 = '7', P8 = '8', P9 = '9', P10 = '10') 
+
+##decide on your filtering step. Do you want things that reach a final frequency in <95%? 
+#filter <- fixed %>% filter(P5 >= 80 | P6 >= 80 | P7 >= 80 | P8 >= 80 | P9 >= 80 | P10 >= 80)
+
+#count up all of the variants by gene, strain, condition and make a little table.
+for_table <- fixed %>% select(gene, strain, condition, strain_condition_hit_count) %>% unique()
+
+#write outputs
+#write_csv(filter, "~/2023.04.19_Final_alleleTrajectories/2023.07.17_Filtered_convergentHits.csv")
+#write_csv(for_table, "~/path/to/file")
+```
