@@ -47,7 +47,6 @@ freq30$freq <- 30
 
 #combine
 all_data <- rbind(freq30, my_data)
-
 ```
 
 ```{r reading, include=FALSE}
@@ -83,7 +82,7 @@ saveRDS(freq,"~/data/gvaginalis_expEvo/2023.04.19_Final_alleleTrajectories/freq"
 
 Start here with the file
 ```{r} 
-freq <- readRDS("~/data/gvaginalis_expEvo/2023.04.19_Final_alleleTrajectories/freq")
+freq <- readRDS("~/data/gvaginalis_expEvo/finding_convergentHits/2023.04.19_FindingConvergentHits//freq")
 
 # Concatenate hits so that if a hit appears at the same position in the same ID, it is only counted once. This removes variants present that are in both POOL and Single data of the same frequency
 freqs_filtered <- freq[!duplicated(freq[, c("pos", "ID", "freq")]), ]
@@ -95,8 +94,10 @@ freq30_filtered <- freqs_filtered %>% filter(freq == 30)
 Hits where the ancestor is invariant.
 No hits went from freq = 100 to freq = 0
 ```{r}
-towrite_data <- "~/data/gvaginalis_expEvo/2023.04.19_Final_alleleTrajectories/findingConvergentHits.csv"
-towrite_table <- "~/data/gvaginalis_expEvo/2023.04.19_Final_alleleTrajectories/table.csv"
+towrite_data <- "~/data/gvaginalis_expEvo/finding_convergentHits/findingConvergentHits.csv"
+towrite_genic_table <- "~/data/gvaginalis_expEvo/finding_convergentHits/genic_table.csv"
+towrite_intergenic_table <- "~/data/gvaginalis_expEvo/finding_convergentHits/intergenic_table.csv"
+
 
 #count up all the hits within the same strain (GV2 or 14018) and Condition (biofilm or planktonic)
 fixed10 <- freq10_filtered %>% filter(Anc == 100 | Anc == 0) %>% ##invariant in the ancestor
@@ -111,20 +112,54 @@ fixed30 <- freq30_filtered %>% filter(Anc == 100 | Anc == 0) %>%
   rename(P0 = '0', P5 = '5', P6 = '6', P7 = '7', P8 = '8', P9 = '9', P10 = '10')
 
 fixed30$freq <- NULL
-new_rows <- anti_join(fixed30, fixed, by = c("pos", "ID"))
+new_rows <- anti_join(fixed30, fixed10, by = c("pos", "ID"))
 
 ##filter to variants which sweep >95% by the evolved passage, or happen more than once or change in frequency by more than 30%.
+all_hits <- rbind(new_rows, fixed10) %>%
+  mutate(INFO_split = strsplit(INFO, ","),  # Split INFO column by comma
+         first_entry = sapply(INFO_split, function(x) x[1]),  # Extract the first entry
+         variant = case_when(
+           grepl("synonymous_variant", first_entry) ~ "synonymous",
+           grepl("frameshift_variant", first_entry) & grepl("missense_variant", first_entry) ~ "frameshift variant, missense",
+           grepl("frameshift_variant", first_entry) ~ "frameshift variant",
+           grepl("missense_variant", first_entry) ~ "missense",
+           grepl("stop_gained", first_entry) ~ "stop gained",
+           grepl("start_lost", first_entry) ~ "start lost",
+           grepl("upstream_gene_variant", first_entry) ~ "upstream gene variant",
+           grepl("downstream_gene_variant", first_entry) ~ "downstream gene variant",
+           grepl("stop_lost&splice_region_variant", first_entry) ~ "stop lost",
+           TRUE ~ NA_character_
+         )) %>%
+  mutate(genic = case_when(
+    variant == "upstream gene variant" | 
+      variant == "downstream gene variant" ~ "intergenic",
+    TRUE ~ "genic")) %>% 
+  select(-INFO_split, -first_entry)
 
-test2 <- rbind(new_rows, fixed10) %>% 
+#genic
+genic_hits <- all_hits %>% 
+  filter(genic == "genic") %>% 
   group_by(gene, strain, condition) %>%  ##group by strain, gene, and condition, then count up the hits
-  mutate(strain_condition_hit_count= n())
+  mutate(count= n())
+  
+#intergenic
+intergenic_hits <- all_hits %>% 
+  filter(genic == "intergenic") %>% 
+  group_by(pos, strain, condition) %>% 
+  mutate(count = n()) 
+
+intergenic_table <- intergenic_hits %>% select(pos, strain, condition, count) %>% unique()
+  
   
 #count up all of the variants by gene, strain, condition and make a little table.
-for_table <- test2 %>% select(gene, strain, condition, strain_condition_hit_count) %>% unique()
+genic_table <- genic_hits %>% select(gene, strain, condition, count) %>% unique()
 
 #write outputs
-#write_csv(fixed, towrite_data)
-#write_csv(for_table, towrite_table)
+write_csv(all_hits, towrite_data)
+write_csv(genic_table, towrite_table)
+write_csv(intergenic_table, towrite_intergenic_table)
+
+
 ```
 
 
