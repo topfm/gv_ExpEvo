@@ -5,11 +5,12 @@ output: html_document
 
 ```{r setup, include=FALSE}
 library(tidyverse)
+source("~/scripts/exportPlot.R")
 ```
 
 
 ```{r cars}
-lo <- read_csv("~/2022/2022.11.01_Lipidomics/GV_lipidomics_data.csv")
+lo <- read_csv("~/data/gvaginalis_expEvo/lipidomics//2022.11.01_Lipidomics/GV_lipidomics_data.csv")
 lo <- lo %>% select("lipid_class", "CFS-1-avg", "CFS-2-avg", "CFS-3-avg", "ANC-1-avg")
 lo <- na.omit(lo)
 lol <- gather(lo, key= "condition", value= "value", "CFS-1-avg", "CFS-2-avg", "CFS-3-avg", "ANC-1-avg")
@@ -34,57 +35,18 @@ lol$condition <- gsub("-avg", "", lol$condition)
 ##set colors
 mycols <- colors()[c(461, 509, 114, 610, 118, 72, 579, 142, 261, 542, 471, 11, 128)] 
 
+only_known <- lol %>% filter(lipid_class != "Unknown")
+
 ##plot
-lipid.plot <- ggplot(lol, aes(fill= lipid_class, y=value, x=condition)) + geom_bar(position= "fill", stat= "identity") + theme_classic() + scale_fill_manual(name= "Lipid Class", values = mycols) + ylab("fraction of total lipid profile") + xlab("") + theme(text = element_text(siz= 20))
+lipid.plot <- ggplot(only_known, aes(fill= lipid_class, y=value, x=condition)) + geom_bar(position= "fill", stat= "identity") + theme_classic() + scale_fill_manual(name= "Lipid Class", values = mycols) + ylab("fraction of known lipid profile") + xlab("") + theme(text = element_text(siz= 20))
 
 lipid.plot
 ```
 
-Export plot
 ```{r}
-ExportPlot <- function(gplot, filename, width=2, height=1.5) {
-  # Export plot in PDF and EPS.
-  # Notice that A4: width=11.69, height=8.27
-  ggsave(paste(filename, '.pdf', sep=""), device= cairo_pdf, gplot, width = width, height = height, family= "Arial")
-  print(gplot)
-  dev.off()
-  png(file = paste(filename, '.png', sep=""), width = width * 100, height = height * 100)
-  print(gplot)
-  dev.off()
-}
-```
-
-```{r}
-#ExportPlot(lipid.plot, "~/2022/2022.11.01_Lipidomics/2023.10.03_lipid-plot", width=7, height=5)
+#ExportPlot(lipid.plot, "~/data/gvaginalis_expEvo/lipidomics/2022.11.01_Lipidomics/2023.10.16_lipid-plot_onlyKnown", width=7, height=5)
 
 ```
 
-```{r}
-mycolors4 <- c( "orange","#2191FB","#A4B0F5","turquoise2" )
-
-x <- read_csv("~/2022/2022.11.01_Lipidomics/GV_lipidomics_data.csv")
-x <- filter(x, lipid_class == "MGDG")
-
-  
-cd <- c("ancestral1-1", "ancestral1-2", "ancestral1-3","cfs1-1", "cfs1-2", "cfs1-3", "cfs2-1", "cfs2-2", "cfs2-3", "cfs3-1","cfs3-2", "cfs3-3")
-
-xy <- x %>% select("ancestral1-1", "ancestral1-2", "ancestral1-3","cfs1-1", "cfs1-2", "cfs1-3", "cfs2-1", "cfs2-2", "cfs2-3", "cfs3-1","cfs3-2", "cfs3-3", "lipid_class")
-
-xy <- gather(xy, key= "condition", value= "value", cd)
-xy <- xy %>% separate('condition', into = c("condition","replicate"), sep= "-")
-
-mgdg_total <- ggplot(xy, aes(condition, value, color=condition)) + geom_boxplot() + theme_bw() + xlab("") + scale_y_log10() + ggtitle("Total MGDG in sample") + ylab("log amount") + scale_color_manual(values= mycolors4, labels= c("Ancestral", "Evolved A", "Evolved B", "Evolved C"))
-
-mgdg_total
-
-#ExportPlot(mgdg_total, "~/2022.11.01_Lipidomics/2022.12.06_mgdg-plot", width = 7, height = 5)
-
-
-###now looking at pvalues
-p <- x[,31:35]
-p <- gather(p, key="condition", value="pvalue", colnames(p))
-p$pvalue <- as.numeric(p$pvalue)
-ggplot(p, aes(condition, pvalue, color= condition)) + geom_boxplot() + theme_bw() + geom_hline(yintercept=.05) + ggtitle("MGDG pvalues")
-```
 
 
