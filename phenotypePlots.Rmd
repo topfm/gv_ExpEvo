@@ -1,0 +1,571 @@
+---
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r, echo=FALSE}
+library(tidyverse)
+library(ggpubr)
+
+library(Rmisc)
+library(forcats)
+library(RColorBrewer)
+
+library(readr)
+library(magrittr)
+library(gridExtra)
+library(vtable)
+library(kableExtra)
+library(lattice)
+library(dplyr)
+library(ggplot2)
+
+source("~/scripts/exportPlot.R")
+```
+
+```{r data, include=FALSE}
+##read in data
+
+setwd("~/data/gvaginalis_expEvo/phenotype-plots/")
+
+##Aerobic growth curves
+gcA <- read_csv("2022.05.09_GV14018_GCs_biofilm_ancestor_all P5_all P10_JM.csv")
+
+gv2 <- readRDS("~/data/gvaginalis_expEvo/2022.06.16_gv_growthcurves/GV2-aerobic-data")
+gv2.anc <- filter(gv2, Sample == "GV2 ancestor ")
+
+gv.14 <- readRDS("~/data/gvaginalis_expEvo/2022.06.16_gv_growthcurves/GV14018-aerobic-data")
+gv.14.anc <- filter(gv.14, Sample == "GV14018 ancestor ")
+gv.anc <- rbind(gv2.anc, gv.14.anc)
+gv.anc <- na.omit(gv.anc)
+
+gv.both <- rbind(gv2, gv.14)
+gv.both <- na.omit(gv.both)
+
+
+##Anaerobic growth curves
+gcAn <- read_csv("2022-11-11-GV2-14018-anaerobicGrowthCurves.csv", col_names = TRUE)
+
+##biofilm and CV quantification
+biofilmQuant<- read.csv("2022.12.02_area scanning_GV2 and 14018.csv", header=T) %>%
+  mutate(Strain = as.factor(Strain))
+
+##AutoAggregation
+sediment_all <- read.csv("2024.03.26_GV sedimentation_all strains_manuscript edits.csv", header=T)
+
+```
+
+```{r colors, include =FALSE}
+##Set colors
+GV2colors <- c("#08306B","#08306B", "#08306B", "#9ECAE1")
+GV2colors2 <- c("#9ECAE1", "#08306B","#08306B", "#08306B")
+
+GV14018colors <- c("#7F2704", "#7F2704", "#7F2704", "#FDAE6B")
+
+
+GV2_colors <- c("#9ECAE1", "#08306B")
+GV14018_colors <- c("#FDAE6B", "#7F2704")
+Anc_colors <- c("#FDAE6B", "#9ECAE1")
+```
+
+# OD & CV Biofilm quantification
+
+### Boxplots by strain Evolved vs. Ancestor
+
+```{r, echo = FALSE}
+
+GV2 <- filter(biofilmQuant, Strain == "GV2")
+GV14018 <- filter(biofilmQuant, Strain == "14018")
+
+
+#OD_biofilm
+GV2_biofilm <- ggplot(data=GV2, aes(x=Type, y=OD.biofilm, color=Type)) + 
+  geom_boxplot() + 
+  xlab("GV strain") + 
+  ylab("OD(600) biofilm") + 
+  ggtitle("GV2 biofilm density") + 
+  coord_cartesian(ylim=c(0.05,0.3)) + 
+  theme_minimal() + scale_color_manual(values = GV2_colors) +
+  theme(plot.title = element_text(hjust = 0.5), text=element_text(size= 12), legend.title = element_blank(), axis.title.x=element_blank(), axis.text.x=element_blank(), axis.ticks.x=element_blank()) +
+  stat_compare_means(method = "wilcox.test",  data = GV2, aes(label="p.format"))
+
+ExportPlot(GV2_biofilm, "plots/boxplots/GV2_biofilm", height= 5, width= 7)
+
+GV14018_biofilm <- ggplot(data=GV14018, aes(x=Type, y=OD.biofilm, color=Type)) + 
+  geom_boxplot() + 
+  xlab("GV strain") + 
+  ylab("OD(600) biofilm") + 
+  ggtitle("GV14018 biofilm density") + 
+  coord_cartesian(ylim=c(0.05,0.3)) + 
+  theme_minimal() + 
+  scale_color_manual(values= GV14018_colors) +
+  theme(plot.title = element_text(hjust = 0.5), text=element_text(size= 12), legend.title = element_blank(), axis.title.x=element_blank(), axis.text.x=element_blank(), axis.ticks.x=element_blank())
+  stat_compare_means(method = "wilcox.test",  data = GV14018, aes(label="p.format"))
+
+ExportPlot(GV14018_biofilm, "plots/boxplots/GV14018_biofilm", height=5, width =7)
+
+
+#OD_CV
+GV2_CV <-  ggplot(data=GV2, aes(x=Type, y=CV, color=Type)) + 
+  geom_boxplot() + xlab("GV strain") + ylab("OD(570) crystal violet") + ggtitle("GV2 crystal violet") + coord_cartesian(ylim=c(0.05,3)) + theme_minimal() + scale_color_manual(values= GV14018_colors) +
+  theme(plot.title = element_text(hjust = 0.5), text=element_text(size= 12), axis.title.x=element_blank(), axis.text.x=element_blank(),axis.ticks.x=element_blank(), legend.title = element_blank()) + 
+  stat_compare_means(method = "wilcox.test",  data = GV14018, label.x = 0.75, label.y = 2.5, aes(label="p.format"))
+
+ExportPlot(GV2_CV, "plots/boxplots/GV2_CV", height = 5, width = 7)
+
+GV14018_CV <- ggplot(data=GV14018, aes(x=Type, y=CV, color=Type)) + 
+  geom_boxplot() + xlab("GV strain") + ylab("OD(570) crystal violet") + ggtitle("GV14018 crystal violet") + coord_cartesian(ylim=c(0.05,3)) + theme_minimal() + scale_color_manual(values= GV14018_colors) +
+  theme(plot.title = element_text(hjust = 0.5), text=element_text(size= 12), axis.title.x=element_blank(), axis.text.x=element_blank(),axis.ticks.x=element_blank(), legend.title = element_blank()) + 
+  stat_compare_means(method = "wilcox.test",  data = GV14018, label.x = 0.75, label.y = 2.5, aes(label="p.format"))
+
+ExportPlot(GV14018_CV, "plots/boxplots/GV14018_CV", height = 5, width = 7)
+
+
+```
+
+### OD & CV of 14018 Ancestor vs. GV2 Ancestor
+
+```{r, echo = FALSE}
+Ancestors <- filter(biofilmQuant, Type == "Ancestor")
+
+Ancestors_biofilm <- ggplot(data=Ancestors, aes(x=Strain, y=OD.biofilm, color=Strain)) + 
+  geom_boxplot() + xlab("GV strain") + ylab("OD(600) biofilm") + ggtitle("G. vaginalis biofilm density") + scale_color_manual(values= Anc_colors) + coord_cartesian(ylim=c(0.05,0.3)) + theme_minimal() + 
+  theme(plot.title = element_text(hjust = 0.5)) + theme(text=element_text(size= 12)) + theme(axis.title.x=element_blank(),
+    axis.text.x=element_blank(),
+    axis.ticks.x=element_blank(), legend.title = element_blank()) + 
+   stat_compare_means(method = "t.test", label.x = 1, label.y = 0.25)
+
+
+ExportPlot(Ancestors_biofilm, "plots/boxplots/Ancestors_biofilm", height=5, width=7)
+
+
+Ancestors_CV <- ggplot(data=Ancestors, aes(x=as.factor(Strain), y=CV, color=Strain)) + 
+  geom_boxplot() + xlab("GV strain") + ylab("OD(570) crystal violet") + ggtitle("G. vaginalis CV") + scale_color_manual(values= Anc_colors) +   coord_cartesian(ylim=c(0.05,3)) + theme_minimal() + theme(text=element_text(size= 12)) + theme(axis.title.x=element_blank(),
+    axis.text.x=element_blank(),
+    axis.ticks.x=element_blank(), legend.title = element_blank()) + 
+  stat_compare_means(method = "t.test", label.x = 1, label.y = 2.5)
+
+
+ExportPlot(Ancestors_CV, "plots/boxplots/Ancestors_CV", height=5,width = 7)
+```
+
+### 
+
+# Growth curves
+
+## Aerobic GV14018 Ancestor vs. GV2 Ancestor
+
+```{r, echo = FALSE}
+gv.anc$Value <- as.numeric(gv.anc$Value)
+gvs <- summarySE(gv.anc, measurevar="Value", groupvars=c("Sample","Time"))
+
+
+plot <- ggplot(gvs, aes(x=Time, y=Value, colour=Sample))  + geom_line(aes(group=Sample)) + theme_classic()+ geom_errorbar(aes(ymin=Value-se, ymax=Value+se), width=.001) +   scale_x_discrete(breaks=c("00:00:00","24:00:00","48:00:00"), labels=c("0", "24", "48")) + ylim(0.1, 1) + ylab("OD600") + scale_color_manual(name= "Population",labels= c("GV14018 ancestor", "GV2 ancestor"), values = Anc_colors)
+
+ExportPlot(plot, "plots/Aerobic_GCs/Ancestor_gc", height = 5, width = 7)
+
+```
+
+### Aerobic Ancestor vs. Evolved
+
+```{r, echo = FALSE}
+##making sure the class of each column is correct
+gv.both <- gv.both %>% 
+  mutate(Value = as.numeric(Value), Sample = as.character(Sample), 
+         Time = as.factor(Time), 
+         Replicate = as.factor(Replicate))
+
+##apply function
+tgc <- summarySE(gv.both, measurevar="Value", groupvars=c("Sample","Time")) %>%
+  mutate(Type = case_when(grepl("ancestor", Sample) ~ "Ancestor", TRUE ~"Evolved"))
+  
+
+##filter so each Experiment is separated out to plot
+cfs1 <- filter(tgc, Sample %in% c("GV14018 ancestor ", "2021-10-01-GV14018-CFS-1_P10 ", "2021-10-01-GV14018-CFS-2_P10 ", "2021-10-01-GV14018-CFS-3_P10 "))
+
+nil1  <- filter(tgc, Sample %in% c("GV14018 ancestor ", "2021-10-01-GV14018-Nil-1_P10 ", "2021-10-01-GV14018-Nil-2_P10 ","2021-10-01-GV14018-Nil-3_P10 "))
+
+##GV14018 Nil population
+nil1_plot <- ggplot(nil1, aes(x=Time, y=Value, colour=Type))  + 
+  geom_line(aes(group=Sample)) + 
+  theme_classic() + 
+  scale_color_manual(name= "Population", values= GV14018_colors) +
+  geom_errorbar(aes(ymin=Value-se, ymax=Value+se), width=.001) + 
+  theme(legend.title = element_blank()) +
+  ylim(0.1, 1.2) +
+  ylab("OD600")  + 
+  scale_x_discrete(breaks=c("00:00:00","24:00:00","48:00:00"), labels=c("0", "24", "48"))
+nil1_plot
+
+ExportPlot(nil1_plot, "plots/Aerobic_GCs/GV14018_nil_GC", height = 5, width = 7)
+
+##GV14018 CFS population
+cfs1_plot <- ggplot(cfs1, aes(x=Time, y=Value, colour=Type))  + 
+  geom_line(aes(group=Sample)) + 
+  theme_classic() + 
+  scale_color_manual(name= "Population", values= GV14018_colors) +
+  geom_errorbar(aes(ymin=Value-se, ymax=Value+se), width=.001) + 
+  ylim(0.1, 1.2) +
+  theme(legend.title = element_blank()) +
+  ylab("OD600")  + 
+  scale_x_discrete(breaks=c("00:00:00","24:00:00","48:00:00"), labels=c("0", "24", "48"))
+cfs1_plot
+ExportPlot(cfs1_plot, "plots/Aerobic_GCs/GV14018_cfs_GC", height = 5, width = 7)
+
+
+```
+
+# Aerobic growth curves : GV2
+
+```{r, echo = FALSE}
+tgc2 <- summarySE(gv.both, measurevar= "Value", groupvars=c("Sample", "Time"))  %>%
+  mutate(Type = case_when(grepl("ancestor", Sample) ~ "Ancestor", TRUE ~"Evolved"))
+
+##filter so each Experiment is separated out to plot
+tgc_jun <- filter(tgc2,   Sample %in% c("GV2 ancestor ","Experiment 1_Population 1 ", "Experiment 1_Population 2 ", "Experiment 1_Population 3 "))
+tgc_aug <- filter(tgc2,  Sample %in% c("GV2 ancestor ", "Experiment 2_Population 1 ", "Experiment 2_Population 2 ", "Experiment 2_Population 3 "))
+tgc_nil <- filter(tgc2,   Sample %in% 
+                    c("GV2 ancestor ", "Experiment 3_Population 1_end ", "Experiment 3_Population 2_end ", "Experiment 3_Population 3_end "))
+
+
+##make plots
+june_plot <- ggplot(tgc_jun, aes(x=Time, y=Value, colour=Type))  + 
+  geom_line(aes(group=Sample)) + 
+  theme_classic() + 
+  geom_errorbar(aes(ymin=Value-se, ymax=Value+se), width=.001) + 
+  theme(legend.title = element_blank()) +
+  ylim(0.1, 1) + 
+  ylab("OD600") + 
+  scale_color_manual(name= "Population", values= GV2_colors) +
+  scale_x_discrete(breaks=c("00:00:00","24:00:00","48:00:00"), labels=c("0", "24", "48"))
+
+aug_plot <- ggplot(tgc_aug, aes(x=Time, y=Value, colour=Type))  + 
+  geom_line(aes(group=Sample)) + 
+  theme_classic() + 
+  geom_errorbar(aes(ymin=Value-se, ymax=Value+se), width=.001) + 
+  ylim(0.1, 1 ) + 
+  ylab("OD600") +
+  theme(legend.title = element_blank()) +
+  scale_color_manual(name= "Population", values= GV2_colors) + scale_x_discrete(breaks=c("00:00:00","24:00:00","48:00:00"), labels=c("0", "24", "48"))
+
+nil_plot <- ggplot(tgc_nil, aes(x=Time, y=Value, colour=Type))  + 
+  geom_line(aes(group=Sample)) + 
+  theme_classic() + 
+  scale_color_manual(name= "Population", values= GV2_colors) + 
+  geom_errorbar(aes(ymin=Value-se, ymax=Value+se), width=.001) + ylim(0.1, 1) + ylab("OD600")  + 
+  theme(legend.title = element_blank()) +
+  scale_x_discrete(breaks=c("00:00:00","24:00:00","48:00:00"), labels=c("0", "24", "48"))
+
+
+##view plots
+ExportPlot(june_plot, "plots/Aerobic_GCs/GV2_June_CFS", height = 5, width = 7)
+ExportPlot(aug_plot, "plots/Aerobic_GCs/GV2_Aug_CFS", height = 5, width = 7)
+ExportPlot(nil_plot, "plots/Aerobic_GCs/GV2_Nil", height = 5, width = 7)
+```
+
+# GV14018 Aerobic
+
+```{r, echo=FALSE}
+
+##filter so each Experiment is separated out to plot
+cfs1 <- filter(tgc2, Sample %in% c("GV14018 ancestor ", "2021-10-01-GV14018-CFS-1_P10 ", "2021-10-01-GV14018-CFS-2_P10 ", "2021-10-01-GV14018-CFS-3_P10 "))
+
+nil1 <- filter(tgc2, Sample %in% c("GV14018 ancestor ", "2021-10-01-GV14018-Nil-1_P10 ", "2021-10-01-GV14018-Nil-2_P10 ","2021-10-01-GV14018-Nil-3_P10 "))
+
+##make plots
+cfsPlot <- ggplot(cfs1, aes(x=Time, y=Value, colour=Type))  + geom_line(aes(group=Sample)) + theme_classic() + 
+  scale_color_manual(name= "Population", values= GV14018_colors) +
+  geom_errorbar(aes(ymin=Value-se, ymax=Value+se), width=.001) + 
+  ylim(0.1, 1) + 
+  ylab("OD600")  + 
+  theme(legend.text = element_blank()) +
+  scale_x_discrete(breaks=c("00:00:00","24:00:00","48:00:00"), labels=c("0", "24", "48"))
+
+nilPlot <- ggplot(nil1, aes(x=Time, y=Value, colour=Type))  + geom_line(aes(group=Sample)) + theme_classic() + 
+  scale_color_manual(name= "Population", values= GV14018_colors) +
+  geom_errorbar(aes(ymin=Value-se, ymax=Value+se), width=.001) + ylim(0.1, 1) + ylab("OD600")  + 
+  theme(legend.text = element_blank()) +
+  scale_x_discrete(breaks=c("00:00:00","24:00:00","48:00:00"), labels=c("0", "24", "48"))
+
+##view plots
+ExportPlot(nilPlot, "plots/Aerobic_GCs/GV14018_nil", height= 5, width=7)
+ExportPlot(cfsPlot, "plots/Aerobic_GCs/GV14018_cfs", height = 5, width = 7)
+
+```
+
+# Anaerobic growth curves
+
+```{r, echo = FALSE}
+##Anaerobic growth curves
+gc <- read_csv("2023.01.10_14018 GCs_anaerobic_ancestor redone.csv", col_names = TRUE)
+```
+
+```{r, echo= FALSE}
+gc <- na.omit(gc)
+##format so Time is a column
+rownames(gc) <- gc$Time
+gc <- t(gc)
+gc <- gc[-1,]
+gc <- as.data.frame(gc)
+gc <- tibble::rownames_to_column(gc, "Sample")
+gc <- gc %>% separate(Sample, sep= "[#]", into= c("Sample", "Replicate"))
+
+##Remove extra characters from the Replicate column
+gc$Replicate <- gsub( ")", "", gc$Replicate)
+gc$Sample <- sub("\\_$", "", gc$Sample)
+name1 <- gc[,-c(1,2)]
+list1 <- paste0(colnames(name1))
+list1 <- c(list1)
+
+##gather so that each timepoint has a separate Time value (makes it easier to plot)
+lgc_onlynamed <- gather(gc, key= 'Time', value= 'Value',  colnames(name1))
+lgc_onlynamed$Time <- as.factor(lgc_onlynamed$Time)
+data <- lgc_onlynamed
+
+##format data so all the columns are the correct class
+data$Sample <- as.character(data$Sample)
+data$Time <- as.factor(data$Time)
+data$Replicate <- as.factor(data$Replicate)
+data$Value <- as.numeric(data$Value)
+##apply function
+
+tgc3  <- summarySE(data, measurevar= "Value", groupvars=c("Sample", "Time")) %>%
+  mutate(Type = case_when(grepl("ancestor", Sample) ~ "Ancestor", TRUE ~ "Evolved"))
+
+
+tgc_ordered <- tgc3 %>% 
+  mutate(Time=factor(Time)) %>% 
+  mutate(Time=fct_relevel(Time,c("0:00:00", "0:30:00", "1:00:00", "1:30:00", "2:00:00", "2:30:00", "3:00:00", "3:30:00", "4:00:00", "4:30:00", "5:00:00", "5:30:00", "6:00:00", "6:30:00", "7:00:00", "7:30:00", "8:00:00", "8:30:00", "9:00:00", "9:30:00"))) %>% 
+  arrange(Time)
+```
+
+# GV14018 anaerobic
+
+```{r, echo = FALSE}
+tgc_oct_cfs <- filter(tgc_ordered,   Sample %in% c("GV14018_ancestor_2" , "14018_Oct_CFS_1_P10", "14018_Oct_CFS_2_P10" , "14018_Oct_CFS_3_P10" ))
+tgc_oct_nil <- filter(tgc_ordered,   Sample %in% c("GV14018_ancestor_2" , "14018_Oct_Nil_1_P10", "14018_Oct_Nil_2_P10" , "14018_Oct_Nil_3_P10" ))
+
+anc_comparison <- filter(tgc_ordered,   Sample %in% c("GV2_ancestor" , "GV14018_ancestor_2")) 
+
+
+##make plots
+GV14018_cfs <- ggplot(tgc_oct_cfs, aes(x=Time, y=Value, color=Type))  + 
+  geom_line(aes(group=Sample)) + 
+  theme_classic() + 
+  scale_color_manual(values= GV14018_colors) + 
+  geom_errorbar(aes(ymin=Value-se, ymax=Value+se), width=.001) + 
+  ylim(0.1, 1.2) + 
+  ylab("OD600")  + 
+  scale_x_discrete(breaks=c("00:00:00","24:00:00","48:00:00"), labels=c("0", "24", "48")) +
+  theme(legend.title= element_blank()) + 
+  ggtitle("14018 anaerobic curves: October_CFS vs. Ancestor")
+
+print(GV14018_cfs)
+
+ExportPlot(GV14018_cfs, "plots/AnAerobic_GCs/GV14018_cfs", height = 5, width = 7)
+
+
+GV14018_nil <- ggplot(tgc_oct_nil, aes(x=Time, y=Value, colour=Type))  + 
+  geom_line(aes(group=Sample)) + 
+  theme_classic() + 
+  scale_color_manual(name= "Population", values= GV14018_colors) + 
+  geom_errorbar(aes(ymin=Value-se, ymax=Value+se), width=.001) + 
+  ylim(0.1, 1.2) + 
+  ylab("OD600")  + 
+  theme(legend.title = element_blank()) +
+  scale_x_discrete(breaks=c("00:00:00","24:00:00","48:00:00"), labels=c("0", "24", "48")) + ggtitle("14018 anaerobic curves: October_Nil vs. Ancestor")
+
+print(GV14018_nil)
+ExportPlot(GV14018_nil, "plots/AnAerobic_GCs/GV14018_nil", height = 5, width = 7)
+
+ancestors <- ggplot(anc_comparison, aes(x=Time, y=Value, colour=Sample))  + 
+  geom_line(aes(group=Sample)) + 
+  theme_classic() + 
+  scale_color_manual(name= "Population", values= Anc_colors) + 
+  geom_errorbar(aes(ymin=Value-se, ymax=Value+se), width=.001) + 
+  ylim(0.1, 1.2) + 
+  ylab("OD600")  + 
+  theme(legend.title= element_blank()) +
+  scale_x_discrete(breaks=c("00:00:00","24:00:00","48:00:00"), labels=c("0", "24", "48")) + ggtitle("GV anaerobic curves: GV2 vs. 14018 ancestor")
+
+ExportPlot(ancestors, "plots/AnAerobic_GCs/ancestors", height = 5, width = 7)
+```
+
+# GV2 Anaerobic
+
+```{r, echo = FALSE}
+gc <- read_csv("2022-11-11-GV2-14018-anaerobicGrowthCurves.csv", show_col_types = FALSE)
+gc <- na.omit(gc)
+##format so Time is a column
+rownames(gc) <- gc$Time
+gc <- t(gc)
+gc <- gc[-1,]
+gc <- as.data.frame(gc)
+gc <- tibble::rownames_to_column(gc, "Sample")
+gc <- gc %>% separate(Sample, sep= "[#]", into= c("Sample", "Replicate"))
+
+##Remove extra characters from the Replicate column
+gc$Replicate <- gsub( ")", "", gc$Replicate)
+gc$Sample <- sub("\\_$", "", gc$Sample)
+name1 <- gc[,-c(1,2)]
+list1 <- paste0(colnames(name1))
+list1 <- c(list1)
+
+##gather so that each timepoint has a separate Time value (makes it easier to plot)
+lgc_onlynamed <- gather(gc, key= 'Time', value= 'Value',  colnames(name1))
+lgc_onlynamed$Time <- as.factor(lgc_onlynamed$Time)
+data <- lgc_onlynamed
+
+##format data so all the columns are the correct class
+data$Sample <- as.character(data$Sample)
+data$Time <- as.factor(data$Time)
+data$Replicate <- as.factor(data$Replicate)
+data$Value <- as.numeric(data$Value)
+##apply function
+
+tgc3  <- summarySE(data, measurevar= "Value", groupvars=c("Sample", "Time")) %>%
+  mutate(Type = case_when(grepl("ancestor", Sample) ~ "Ancestor", TRUE ~"Evolved"))
+
+
+tgc_ordered <- tgc3 %>% 
+  mutate(Time=factor(Time)) %>% 
+  mutate(Time=fct_relevel(Time,c("0:00:00", "0:30:00", "1:00:00", "1:30:00", "2:00:00", "2:30:00", "3:00:00", "3:30:00", "4:00:00", "4:30:00", "5:00:00", "5:30:00", "6:00:00", "6:30:00", "7:00:00", "7:30:00", "8:00:00", "8:30:00", "9:00:00", "9:30:00"))) %>% 
+  arrange(Time)
+
+tgc_jun <- filter(tgc_ordered,   Sample %in% c("GV2_ancestor" , "GV2_June_CFS_1_P7_ ", "GV2_June_CFS_2_P7" , "GV2_June_CFS_3_P7"))
+
+tgc_aug <- filter(tgc_ordered,   Sample %in% c("GV2_ancestor" , "GV2_Aug_CFS_1_P5_ ", "GV2_Aug_CFS_2_P5_ ", "GV2_Aug_CFS_3_P5_ " ))
+
+tgc_nil <- filter(tgc_ordered,   Sample %in% 
+                    c("GV2_ancestor" , "GV2_Aug_Nil_1_P10_ ", "GV2_Aug_Nil_2_P10_ ", "GV2_Aug_Nil_3_P10_ " ))
+
+june_plot <- ggplot(tgc_jun, aes(x=Time, y=Value, colour=Type)) + 
+  geom_line(aes(group=Sample)) + 
+  theme_classic() + 
+  geom_errorbar(aes(ymin=Value-se, ymax=Value+se), width=.001) + ylim(0.1, 1) + 
+  ylab("OD600") + 
+  scale_color_manual(name= "", values= GV2colors2) +
+  scale_x_discrete(breaks=c("00:00:00","24:00:00","48:00:00"), labels=c("0", "24", "48")) + ggtitle("GV2 anaerobic curves: June vs. Ancestor")
+
+print(june_plot)
+ExportPlot(june_plot, "plots/AnAerobic_GCs/GV2_june_CFS_anAerobic", height= 5, width=7)
+
+aug_plot <- ggplot(tgc_aug, aes(x=Time, y=Value, colour=Type))  + 
+  geom_line(aes(group=Sample)) + 
+  theme_classic() + 
+  geom_errorbar(aes(ymin=Value-se, ymax=Value+se), width=.001) + 
+  ylim(0.1, 1 )+ ylab("OD600") +
+  scale_color_manual(name= "", values= GV2colors2) + 
+  scale_x_discrete(breaks=c("00:00:00","24:00:00","48:00:00"), labels=c("0", "24", "48")) + ggtitle("GV2 anaerobic curves: August_CFS vs. Ancestor")
+
+print(aug_plot)
+ExportPlot(aug_plot, "plots/AnAerobic_GCs/GV2_aug_CFS_anAerobic", height= 5, width=7)
+
+nil_plot <- ggplot(tgc_nil, aes(x=Time, y=Value, colour=Type)) + 
+  geom_line(aes(group=Sample)) + 
+  theme_classic() + 
+  scale_color_manual(name= "", values= GV2colors2) +
+  geom_errorbar(aes(ymin=Value-se, ymax=Value+se), width=.001) + ylim(0.1, 1) + ylab("OD600")  + 
+  scale_x_discrete(breaks=c("00:00:00","24:00:00","48:00:00"), labels=c("0", "24", "48")) + ggtitle("GV2 anaerobic curves: August_Nil vs. Ancestor")
+
+print(nil_plot)
+ExportPlot(nil_plot, "plots/AnAerobic_GCs/GV2_nil_anAerobic", height= 5, width=7)
+```
+
+#Graphing all trials together
+
+```{r}
+sediment_all <- read.csv("2024.03.26_GV sedimentation_all strains_manuscript edits.csv", header=T)
+sediment_all$Replicate_number <- as.factor(sediment_all$Replicate_number)
+sediment_all$Timepoint..min. <- as.factor(sediment_all$Timepoint..min.)
+sediment_all$Type <- as.factor(sediment_all$Type)
+```
+
+# Graphing by experiment
+
+```{r}
+##filter data
+June <- filter(sediment_all, Population == "06-03-GV2-SsaproCFS-1_P7" | Population == "06-03-GV2-SsaproCFS-2_P7" | Population == "06-03-GV2-SsaproCFS-3_P7" | Population == "GV2_ancestor")
+Aug_CFS <- filter(sediment_all, Population == "07-30-GV2-SsaproCFS-1_P5"| Population == "07-30-GV2-SsaproCFS-2_P5" | Population == "07-30-GV2-SsaproCFS-3_P5" | Population == "GV2_ancestor")
+Aug_Nil <- filter(sediment_all, Population == "07-30-GV2-Nil-1_P10"| Population == "07-30-GV2-Nil-2_P10" | Population == "07-30-GV2-Nil-3_P10" | Population == "GV2_ancestor")
+
+Oct_CFS <- filter(sediment_all,  Population == "10-01-GV14018-CFS-1_P10" | Population == "10-01-GV14018-CFS-2_P10" | Population == "10-01-GV14018-CFS-3_P10" | Population == "GV14018_ancestor")
+
+Oct_Nil <- filter(sediment_all, Population == "10-01-GV14018-Nil-1_P10" | Population == "10-01-GV14018-Nil-2_P10" | Population == "10-01-GV14018-Nil-3_P10" | Population == "GV14018_ancestor")
+
+Ancestral <- filter(sediment_all, Type == "Ancestor")
+
+
+##mutate data for error bars
+GV2_June_CFS <- June %>% group_by(Timepoint..min., Type, Population) %>% mutate(sd = sd(Fract_OD), len=mean(Fract_OD))
+
+GV2_Aug_CFS <- Aug_CFS %>% group_by(Timepoint..min., Type, Population) %>% mutate(sd = sd(Fract_OD), len=mean(Fract_OD))
+
+GV2_Nil <- Aug_Nil %>% group_by(Timepoint..min., Type, Population) %>% mutate(sd = sd(Fract_OD), len=mean(Fract_OD))
+
+GV14018_CFS <- Oct_CFS %>% group_by(Timepoint..min., Type, Population) %>% mutate(sd = sd(Fract_OD), len=mean(Fract_OD))
+
+GV14018_Nil <- Oct_Nil %>% group_by(Timepoint..min., Type, Population) %>% mutate(sd = sd(Fract_OD), len=mean(Fract_OD))
+
+Anc_stats <- Ancestral %>% 
+  group_by(Timepoint..min.,  Population) %>% 
+  mutate(sd = sd(Fract_OD), len=mean(Fract_OD))
+
+```
+
+Code for ancestral graph
+
+```{r}
+generate_plot <- function(df) {
+  plot_title <- deparse(substitute(df))  # Get the name of the dataframe
+  
+  # Define color palette based on plot_title
+  if (grepl("GV2", plot_title)) {
+    color_palette <- GV2_colors
+  } else if (grepl("GV14018", plot_title)) {
+    color_palette <- GV14018_colors
+  } else {
+    color_palette <- NULL
+  }
+  
+  ggplot(data = df, aes(Timepoint..min., len)) + 
+    geom_line(aes(color = Type, group = Population)) +
+    geom_point(aes(color = Type)) +
+    geom_errorbar(aes(ymin = len - sd, ymax = len + sd, color = Type, group = Type),
+                  width = 0.2) + 
+    xlab("Time (min)") +
+    ylab("Fraction of OD (out of 1)") +
+    ggtitle(plot_title) +
+    scale_y_continuous(breaks = seq(0, 1.0, 0.25)) +
+    theme_minimal() +
+    theme(text = element_text(size = 11)) +
+    theme(plot.title = element_text(size = 14, hjust = 0.5, vjust = 2)) +
+    scale_color_manual(values = color_palette)  # Set color palette
+}
+
+
+gv2_juneAgg<- generate_plot(GV2_June_CFS)
+gv2_augAgg <- generate_plot(GV2_Aug_CFS)
+gv14018_nilAgg <- generate_plot(GV14018_Nil)
+gv14018_cfsAgg <- generate_plot(GV14018_CFS)
+
+ancAgg <- ggplot(data=Anc_stats, aes(Timepoint..min., len)) + 
+  geom_line(aes(color= Strain, group = Strain)) +
+  geom_point(aes(color=Strain)) +
+  geom_errorbar(aes(ymin= len-sd, ymax = len+sd, color=Strain, group=Strain),
+                width = 0.2) + 
+  xlab("Time (min)") +ylab("Fraction of OD (out of 1)") +  scale_y_continuous(breaks=seq(0,1.0, 0.25)) + 
+         theme_minimal() + scale_color_manual(values= Anc_colors) +
+         theme(text=element_text(size= 12))
+
+ExportPlot(ancAgg, "plots/autoAggregation/ancestor_autoAggregaation")
+
+ExportPlot(ancAgg, "plots/autoAggregation/ancestor_autoAggregaation")
+ExportPlot(gv2_juneAgg, "plots/autoAggregation/gv2_june_cfs_autoAggregaation")
+ExportPlot(gv2_augAgg, "plots/autoAggregation/gv2_aug_cfs_autoAggregaation")
+ExportPlot(gv14018_nilAgg, "plots/autoAggregation/gv14018_nil_autoAggregaation")
+ExportPlot(gv14018_cfsAgg, "plots/autoAggregation/gv14018_cfs_autoAggregaation")
+
+
+```
