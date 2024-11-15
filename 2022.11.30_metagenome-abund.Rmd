@@ -1,0 +1,52 @@
+---
+title: "gv_metagenomics"
+output: html_document
+---
+
+```{r}
+ExportPlot <- function(gplot, filename, width=2, height=1.5) {
+  ggsave(paste(filename, '.pdf', sep=""), device= cairo_pdf, gplot, width = width, height = height, family= "Arial")
+  print(gplot)
+  dev.off()
+  png(file = paste(filename, '_.png', sep=""), width = width * 100, height = height * 100)
+  print(gplot)
+  dev.off()
+  }
+```
+
+```{r setup, include=FALSE}
+data_dir = "/Users/madelinetopf/2022/2022.11.22_MG102/"
+data_list <- fs::dir_ls(data_dir, regexp = ".tsv$")
+
+
+#return a single data framee 
+my_data <- data_list %>% 
+    purrr::map_dfr(read_tsv, .id = "source")
+#renamee source
+  my_data = data_list %>% 
+    purrr::map_dfr(read_tsv, .id = "source") %>% 
+    dplyr::mutate(source = stringr::str_replace(source, "file/path", ""))
+
+  #change source to id name
+  my_data$source <- gsub("/Users/madelinetopf/2022/2022.11.22_MG102/", "", my_data$source)
+  my_data$source <- gsub(".tsv", "", my_data$source)
+names(my_data)[names(my_data) == 'source'] <-  "ID"
+
+view(my_data)
+
+#write_csv(my_data, "~/2022.11.22_MG102/2022.11.30_metagenomics-test.csv")
+
+my_data_adjust <- read_csv("~/2022/2022.11.22_MG102/2022.11.30_metagenomics-test.csv")
+```
+
+
+```{r}
+mycols <- c("#BCEDF6", "cadetblue", "#9EBCDA", "grey60", "#8C6BB1", "palevioletred", "#6E016B")
+
+mg_abund <- ggplot(my_data_2, aes(ID, abundance, fill=ref)) + geom_bar(stat= "identity") + theme_classic() + scale_fill_manual(name= "Species (Clade)", labels= c("G. piotti (2)", "G. swidsinskii (4)", "G. vaginalis 409-5 (4)", "G. vaginalis (1)", "G. vaginalis 37 (4)", "G. vaginalis HMP9231 (1)", "Gardnerella JNFY17 (2)"), values = mycols) +  xlab("") + theme(text = element_text(size = 16)) + ylim(0, 25) + ylab("% abundance")
+
+mg_abund
+
+ExportPlot(mg_abund, "mg_abund_label", width=9, height=5)
+```
+

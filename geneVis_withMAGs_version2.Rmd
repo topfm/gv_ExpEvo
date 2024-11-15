@@ -1,0 +1,182 @@
+---
+title: "geneVis_withMAGs_version2"
+output:
+  pdf_document: default
+  html_document: default
+date: "2024-04-22"
+---
+
+```{r}
+##setup
+library(tidyverse)
+library(ggpubr)
+library(dplyr)
+library(egg)
+library(ggExtra)
+
+dps_palette <- c("#F8766D", "darkolivegreen3", "#00BFC4", "#C77CFF")
+fas_palette <- c("#F8766D", "#00BFC4", "#C77CFF")
+
+palette2 <- c("#A933A9", "orange", "dodgerblue")
+```
+
+```{r, include=FALSE}
+#experimental data - biofilm only
+experimental_snps <- read_csv("~/data/gvaginalis_expEvo/finding_convergentHits/2023.04.19_FindingConvergentHits/findingConvergentHits.csv") %>% 
+  filter(!(grepl("2022-04-12", ID)))  %>% 
+  mutate(strain = case_when(grepl("GV2", ID) ~ "GV2", grepl("14018", ID) ~ "14018")) %>% 
+  rename(position = "pos", info = "INFO") %>% 
+  filter(condition == "Biofilm")
+
+experimental_snps_count <- experimental_snps %>% group_by(position, info, gene, strain) %>%
+  summarise(num = n())
+experimental_snps_count$type <- "biofilm evolved"
+
+planktonic_snps <- read_csv("~/data/gvaginalis_expEvo/finding_convergentHits/2023.04.19_FindingConvergentHits/findingConvergentHits.csv") %>% 
+  mutate(strain = case_when(grepl("GV2", ID) ~ "GV2", grepl("14018", ID) ~ "14018")) %>% 
+  rename(position = "pos", info = "INFO") %>% 
+  filter(condition == "Planktonic")
+
+planktonic_snps_count <- planktonic_snps %>% group_by(position, info, gene, strain) %>%
+  summarise(num = n())
+planktonic_snps_count$type <- "planktonic evolved"
+
+#natural population data n = 41 with MAGs
+dps_snpEff <- read_tsv("~/data/MAG-pangenome/for_vis_v2/dps_snpEff-withGaps.tsv", skip= 5) %>% 
+  select(POS, INFO) %>%
+  rename(position= POS, info = INFO)
+
+fas_snpEff <- read_tsv("~/data/MAG-pangenome/fas_out/fas_snpEff.tsv", skip= 5) %>% 
+  select(POS, INFO) %>%
+  rename(position= POS, info = INFO)
+
+#SNP counts from MAG data
+dps_snp_counts <- read.delim("~/data/MAG-pangenome/dps_14018_SNPcounts_perPosition.txt")
+fas_snp_counts <- read.delim("~/data/MAG-pangenome/fas_out/g00461_1_geneAln_SNPcounts_perPosition.txt")
+
+#modify population data, adjusting positions to match the reference genome.
+##adding column of counts proportion
+population_dps <- left_join(dps_snpEff, dps_snp_counts) %>% 
+  select(position, info, num) %>% 
+  mutate(type = "natural", gene = "dps", position = position + 40055, num = as.numeric(num))
+population_dps$proportion <- (population_dps$num / sum(population_dps$num)) * 100
+
+population_fas <-  left_join(fas_snpEff, fas_snp_counts) %>% 
+  select(position, info, num) %>%
+  mutate(type = "natural", gene = "fas", position = 1384266 - position, num = as.numeric(num))
+population_fas$proportion <- (population_fas$num / sum(population_fas$num)) * 100
+```
+
+```{r snpEff, include=FALSE}
+##filter and divide into fas and dps by the snpEff annotation, as to include upstream variants.
+experimental_dps <- experimental_snps_count %>%
+  filter(gene == "dps" & strain == "14018")
+experimental_dps$proportion <- (experimental_dps$num  / (sum(experimental_dps$num))) * 100
+
+planktonic_dps <- filter(planktonic_snps_count, gene == "dps" & strain == "14018")
+planktonic_dps$proportion <- (planktonic_dps$num  / (sum(planktonic_dps$num))) * 100
+
+experimental_fas <- filter(experimental_snps_count, gene == "fas" & strain == "GV2")
+experimental_fas$proportion <- (experimental_fas$num / sum(experimental_fas$num)) * 100
+
+planktonic_fas <- filter(planktonic_snps_count, gene == "fas" & strain == "GV2")
+planktonic_fas$proportion <- (planktonic_fas$num / sum(planktonic_fas$num)) * 100
+
+#combine
+dps_plot <- rbind(experimental_dps, population_dps, planktonic_dps)
+fas_plot <- rbind(experimental_fas, population_fas, planktonic_fas)
+
+```
+
+
+```{r, include=FALSE}
+#make a new column 'variant' which shows the consequence of each variant as read in from info
+dps_plot$variant <- case_when(
+  grepl("synonymous_variant", dps_plot$info) ~ "synonymous",
+  grepl("frameshift_variant", dps_plot$info) & grepl("missense_variant", dps_plot$info) ~ "frameshift variant, missense",
+  grepl("frameshift_variant", dps_plot$info) ~ "frameshift variant",
+  grepl("missense_variant", dps_plot$info) ~ "missense",
+  grepl("stop_gained", dps_plot$info) ~ "stop gained",
+  grepl("start_lost", dps_plot$info) ~ "start lost",
+  grepl("upstream_gene_variant", dps_plot$info) ~ "upstream gene variant",
+  TRUE ~ NA
+)
+
+dps_plot_expanded <- dps_plot[rep(rownames(dps_plot), dps_plot$num), ] %>% filter(type == "natural")
+
+
+fas_plot$variant <- case_when(
+  grepl("synonymous_variant", fas_plot$info) ~ "synonymous", 
+  grepl("frameshift_variant", fas_plot$info) & grepl("missense_variant", fas_plot$info) ~ "frameshift variant, missense",
+  grepl("frameshift_variant", fas_plot$info) ~ "frameshift variant",
+  grepl("missense_variant", fas_plot$info) ~ "missense",
+  grepl("stop_gained", fas_plot$info) ~ "stop gained",
+  grepl("start_lost", fas_plot$info) ~ "start lost",
+  grepl("upstream_gene_variant", fas_plot$info) ~ "upstream gene variant",
+  TRUE ~ NA
+)
+fas_plot <- fas_plot %>% 
+  filter(variant != "NA")
+
+fas_plot_expanded <- fas_plot[rep(rownames(fas_plot), fas_plot$num), ] %>% filter(type == "natural")
+
+```
+
+
+```{r, include = FALSE}
+domains <- read_csv("~/data/gvaginalis_expEvo/finding_convergentHits/dps-fas-domains.csv")
+fasDomain <- domains %>% filter(gene == "fas")
+dpsDomain <- domains %>% filter(gene == "dps")
+
+ggplot(fas_plot_expanded, aes(position)) + 
+  geom_histogram(binwidth = 100) +
+  theme_minimal() + 
+  xlab("") +
+  geom_segment(data= fasDomain,aes(x = start, xend= stop, y=-10, yend=-10, color = domain), size =3) + 
+  ylab("") +
+  xlim(1374000, 1384400) +
+  theme(legend.text = element_text(size = 12))
+
+three <- ggplot(dps_plot_expanded, aes(position)) + 
+  geom_histogram(binwidth = 10) + 
+  theme_minimal() + xlab("")+
+  geom_segment(data= dpsDomain,aes(x = start, xend= stop, y=-5, yend=-5, color = domain), size =3) + 
+   ylab("count") +
+  xlim(40030,40535)
+```
+
+```{r}
+fas_plot$type <- factor(fas_plot$type, levels = c("planktonic evolved", "biofilm evolved", "natural"))
+fas_plot_experiment <- fas_plot %>% filter(type == "biofilm evolved" | type == "planktonic evolved")
+
+
+two <- ggplot(fas_plot_experiment, aes(position, type, color= type, size = proportion)) + 
+  geom_point() + 
+  theme_minimal()  + 
+  scale_size_continuous() + 
+  ggtitle("") + 
+  ylab("") + 
+  scale_color_manual(values = palette2, guide = "none") + 
+  xlim(1374000, 1384400)
+
+dps_plot$type <- factor(dps_plot$type, levels = c("planktonic evolved", "biofilm evolved", "natural"))
+dps_plot_experiment <- dps_plot %>% filter(type == "biofilm evolved" | type == "planktonic evolved")
+
+four <- ggplot(dps_plot_experiment, aes(position, type, color= type, size = proportion)) + 
+  geom_point() + 
+  theme_minimal()  +
+  scale_size_continuous() + 
+  ggtitle("") + 
+  ylab("") + 
+  scale_color_manual(values = palette2, guide= "none") + 
+  xlim(40030,40535)
+
+egg::ggarrange(one, two, nrow = 2, ncol=1)
+egg::ggarrange(three, four, nrow = 2, ncol=1)
+
+
+
+```
+
+
+
