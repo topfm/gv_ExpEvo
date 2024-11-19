@@ -26,8 +26,8 @@ def popStats(bam,resultDict):
     pilefile = sample+".pileup"
     with open(pilefile,"w") as out:
         print("Converting bam to pileup ...")
-        subprocess.call(["/opt/PepPrograms/samtools-1.11/samtools","mpileup","-B","-f",\
-            "/opt/data/gvaginalis/GV_14018.fasta",bam],stdout=out)
+        subprocess.call(["samtools","mpileup","-B","-f",\
+            "GV_14018.fasta",bam],stdout=out)
     
     # subsample pileup file 10X - repeat 9 times
     pi = []
@@ -36,7 +36,7 @@ def popStats(bam,resultDict):
     for x in range(1,11):
         print("subsample #"+str(x)+" of "+pilefile+" ...")
         subfile = bam.split(".")[0]+"_subsampled_"+str(x)+".pileup"
-        subprocess.call(["perl","/opt/PepPrograms/popoolation_1.2.2/basic-pipeline/subsample-pileup.pl",\
+        subprocess.call(["perl","popoolation_1.2.2/basic-pipeline/subsample-pileup.pl",\
             "--input",pilefile,"--output",subfile,"--target-coverage","50","--max-coverage","1000",\
                 "--min-qual","20","--fastq-type","sanger","--method","withoutreplace"])
         # calculate pi and Tajima's D for each subsampled pileup file
@@ -44,13 +44,13 @@ def popStats(bam,resultDict):
         dfile = subfile.split(".")[0]+".d"
         tfile = subfile.split(".")[0]+".theta"
         print("Calculating stats ...")
-        subprocess.call(["perl","/opt/PepPrograms/popoolation_1.2.2/Variance-sliding.pl","--measure","pi","--pool-size",\
+        subprocess.call(["perl","popoolation_1.2.2/Variance-sliding.pl","--measure","pi","--pool-size",\
             "10000","--fastq-type","sanger","--min-count","2","--window-size","100000","--step-size",\
                 "10000","--input",subfile,"--output",pifile])
-        subprocess.call(["perl","/opt/PepPrograms/popoolation_1.2.2/Variance-sliding.pl","--measure","D","--pool-size",\
+        subprocess.call(["perl","popoolation_1.2.2/Variance-sliding.pl","--measure","D","--pool-size",\
             "10000","--fastq-type","sanger","--min-count","2","--window-size","100000","--step-size",\
                 "10000","--input",subfile,"--output",dfile])
-        subprocess.call(["perl","/opt/PepPrograms/popoolation_1.2.2/Variance-sliding.pl","--measure","theta","--pool-size",\
+        subprocess.call(["perl","popoolation_1.2.2/Variance-sliding.pl","--measure","theta","--pool-size",\
             "10000","--fastq-type","sanger","--min-count","2","--window-size","100000","--step-size",\
                 "10000","--input",subfile,"--output",tfile])
     # average stats across windows and replicates
