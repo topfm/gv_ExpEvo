@@ -1,0 +1,203 @@
+---
+---
+title: "Selection Statistics of Gardnerella vaginalis. For GV ExpEvo Paper"
+output:
+  html_document: default
+  pdf_document: default
+date: "2024-02-15"
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(ggpubr)
+library(stargazer)
+library(formattable)
+require(ggtree)
+require(treeio)
+library(vtable)
+library(ggtree)
+library(dplyr)
+
+source("~/scripts/exportPlot.R")
+```
+
+Tree of all of the isolate genomes 
+
+```{r}
+setwd("~/data/MAG-pangenome/")
+tre <- read.newick("core_alignment_41.tree")
+
+tiplabels <- as.data.frame(tre$tip.label) %>%
+  rename("tip.lab" = 'tre$tip.label') %>%
+  mutate(metagenome = case_when(grepl("MG", tip.lab) ~ "MAG", TRUE ~ "isolate genome"))
+
+# Plot tree"e
+r <- ggtree(tre, layout = "equal_angle")
+
+# Add tips and labels, color tip points based on metagenome column
+q <- r %<+% tiplabels  +
+  geom_tippoint(aes(color = metagenome)) +
+  scale_color_manual(values = c("black", "magenta")) + 
+  theme(legend.title = element_blank())
+
+q
+#ExportPlot(q, "2024-10-15-68_core_alignment_tree", height = 5, width = 9)
+```
+##Reading in Bohr data (n=45) Gardnerella vaginalis clade 1 samples that I analyzed in 2024 using my scripts. This is a control. 
+#Making sure pi, theta, tajimas D and nseff are numeric. nseff is the average number of sequences which were analyzed by selectionStats.py per site in the alignment. If the nseff is low that means the alignment had a lot of missing data. 
+
+##I am filtering for alignments for which >75% of the sequences were analyzed, 
+#this is 33.75 for Bohr and 34.5 for Topf
+#Some had "None" for nseff which means there wasn't enough data to calculate at any of the positions (max_missing was set to 20%)
+
+```{r, include = FALSE}
+setwd("~/data/MAG-pangenome/")
+
+##defining the biofilm genes of interest
+biofilmGenes <- c("cysK", "dps", "fas", "guaB", "nrdD", "pdtaR", "pdtaS", "pgl", "pgm", "rlmB", "ulaA", "xfp", "xseA" )
+
+##minimum # of genomes to analyze
+min_nseff = 30
+
+##reading in selection stats data. 
+sum_stats_MT <- read_delim("41_pirate_outFiles.2024.02.21/2024-02-21-selectionStats.txt") %>% 
+  mutate(Theta = as.numeric(Theta), 
+         Pi = as.numeric(Pi),
+         nseff = as.numeric(nseff),
+         TajimasD = as.numeric(TajimasD), 
+         dataset = "Topf n=41") %>% 
+  rename(gene = Alignment) 
+sum_stats <- sum_stats_MT %>%
+  filter(nseff > min_nseff, nseff != "None")
+
+##if pi and theta are the same, set TD to 0. 
+#if pi and theta are both 0, TD is undefined, due to division by zero.
+sum_stats <- sum_stats %>%
+  mutate(
+    TajimasD = ifelse(Pi == Theta & Pi != 0, 0, ifelse(Pi == 0 & Theta == 0, NA, TajimasD))
+  )
+
+nas <- sum_stats[!complete.cases(sum_stats), ]
+sum_stats <- na.omit(sum_stats)
+
+```
+
+
+Here I am presenting the calculations for dps and fas within the distribution.
+```{r, echo = FALSE}
+##reading in the gene name keys from PIRATE. It's annoying that PIRATE names all of the genes variable "g000..." 
+names <- read_tsv("2024-02-21-pirateGeneFamilies.tsv")
+
+##filter to gene names which have >66% 
+consensusNames <- names %>% 
+  filter(number_genomes > min_nseff) %>%
+  select(gene_family, consensus_gene_name) %>%
+  rename("gene" = gene_family)
+
+MT <- sum_stats
+
+MT$gene <- gsub(".nucleotide", "", MT$gene)
+MT_labeled <- left_join(MT, consensusNames, by= "gene")
+MT_labeled$consensus_gene_name.x <- NULL
+
+##dps is filtered because the gene tree was messy so I took out a couple sequences.
+##Matching the biofilm gene names to the new gene name
+MT_labeled <-  MT_labeled %>% 
+    mutate(consensus_gene_name = ifelse(gene == "g00461_1", "fas", consensus_gene_name))
+```
+
+
+
+
+
+Just Topf table
+```{r, results='asis'}
+##adding rounding and ranking
+num_genes = nrow(MT_labeled)
+
+round_and_rank <- function(sum_stats) {
+  ranked <- sum_stats %>%
+    mutate(across(c(TajimasD, Theta, Pi), ~ round(., digits = 6)),
+           TD_rank = round(rank(TajimasD, ties.method = "average") / num_genes * 100),
+           Theta_rank = round(rank(Theta,  ties.method = "average") / num_genes * 100),
+           Pi_rank = round(rank(Pi,  ties.method = "average") / num_genes * 100))
+  return(ranked)
+}
+MT_filtered_ranked <- round_and_rank(MT_labeled)
+
+Table <- MT_filtered_ranked %>%
+  filter(consensus_gene_name %in% biofilmGenes)
+
+formattable(Table)
+
+write_csv(Table, "~/data/MAG-pangenome/2025-02-13_genesofInterest_selectionStats.csv")
+
+stargazer(Table, summary = FALSE, type = "latex")
+
+
+```
+
+PAML dNdS
+```{r}
+directory_path <- "./paml_parsed"
+files <- list.files(directory_path, full.names = TRUE)
+data_list <- list()
+
+for(file in files){
+  df <- read_delim(file)
+  df$name <- gsub(".nucleotide_noStop_paml_parsed.txt", "", basename(file))
+  data_list[[length(data_list) + 1]] <- df
+}
+
+paml <- do.call(rbind, data_list) 
+
+paml_out <- paml %>% 
+  select(isolate, comparedTo_iso, YN00_dN, YN00_dS, YN00_omega, name) %>% 
+  mutate(
+    gene = case_when(
+      name == "g00461_1" ~ "fas",
+      name == "g00621" ~ "dps",
+      name == "g00244" ~ "ulaA",
+      name == "g00034" ~ "nrdD",
+      name == "g02205" ~ "xfp",
+      name == "g00985" ~ "pgl",
+      name == "g02282" ~ "pdtaS",
+      name == "g00217" ~ "pdtaR",
+      name == "g01260_1" ~ "xseA",
+      name == "g02260" ~ "pgm",
+      name == "g02279" ~ "guaB",
+      name == "g00503" ~ "cysK",
+      name == "g00949" ~ "rlmB",
+      name == "coreGenome" ~ "Core",
+      TRUE ~ name)) %>% 
+  filter(YN00_omega < 4.5) %>% ##removing weird outlier
+  na.omit() 
+
+paml_genes <- ggplot(paml_out, aes(y = YN00_omega, x = gene)) + 
+  geom_boxplot() + 
+  theme_bw() + 
+  ylab("dNdS") +
+  xlab("") + 
+  theme(text= element_text(size = 10))
+
+paml_genes
+
+```
+
+
+
+```{r, exporting plots, include=FALSE}
+##tajimas D distribution
+#ExportPlot(TD_dist, "~/data/MAG-pangenome/2024-02-22-TD_distribution", width= 7, height = 5)
+
+##Pi distribution
+#ExportPlot(Pi_dist, "~/data/MAG-pangenome/2024-02-22-Pi_distribution", width= 7, height = 5)
+##Pi distribution
+#ExportPlot(piNpiS_dist, "~/data/MAG-pangenome/2024-02-22-PiNpiS_distribution", width= 7, height = 5)
+#ExportPlot(piNpiS_CORE_dist, "~/data/MAG-pangenome/2024-02-21-PiNpiS_CORE", width= 7, height = 5)
+#ExportPlot(eggPAML, "~/data/MAG-pangenome/2024-02-21-eggPAML", width= 6, height=5)
+#ExportPlot(paml_genes, "~/data/MAG-pangenome/2024-02-26-PAMLgenes", width= 7, height=5)
+#ExportPlot(fas_vs_core, "~/data/MAG-pangenome/2024-02-22-fas_core", width= 6, height=5)
+#ExportPlot(td_all, "~/data/MAG-pangenome/2024-02-27-td_all", width= 6, height=5)
+#ExportPlot(td_zoom, "~/data/MAG-pangenome/2024-02-27-td_zoom", width= 6, height=5)
+```
