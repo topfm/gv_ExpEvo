@@ -1,0 +1,130 @@
+---
+title: "2023.10.23_popoolationStatsOut"
+output:
+  pdf_document: default
+  html_document: default
+font-family: Helvetica
+date: "2023-05-08"
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+popoolation statistics of GV as calculated by popoolationStats.py All
+passages.
+
+14018 biofilm samples n = 48 14018 planktonic samples n = 18
+
+GV2 biofilm samples n = 37 GV2 planktonic samples n = 16
+
+There's an outlier in the GV2 planktonic data: 2022-04-12-GV2-Nil-F
+single seq TD \~ +1.9 w. I removed this outlier.
+
+```{r setup, include=FALSE, echo= FALSE}
+library(tidyverse)
+library(ggpubr)
+library(plotly)
+library(egg)
+source("~/scripts/exportPlot.R")
+
+setwd("~/data/gvaginalis_expEvo/popoolationStats/2023.05.08_popoolationStatsOut/")
+```
+
+```{r, include=FALSE}
+#read in data, rename, add columns which specify the type of supplement, the growth condition, and 
+bf1 <- read.delim("14018_All_Biofilm.txt") %>% mutate(sequencing_type = ifelse(grepl("POOL", Sample), "pooled", "single"), condition = "biofilm", strain = "14018", supp = ifelse(grepl("CFS", Sample), "CFS", "Nil")) 
+
+plank1 <- read.delim("14018_All_Planktonic.txt") %>%  mutate(sequencing_type = ifelse(grepl("POOL", Sample), "pooled", "single"), condition = "planktonic", strain = "14018", supp = ifelse(grepl("CFS", Sample), "CFS", "Nil"))
+
+plank2 <- read.delim("GV2_Planktonic.txt") %>%  mutate(sequencing_type = ifelse(grepl("POOL", Sample), "pooled", "single"), condition = "planktonic", strain = "gv2", supp = ifelse(grepl("CFS", Sample), "CFS", "Nil"))
+
+bf2 <- read.delim("GV2_Biofilm.txt") %>%  mutate(sequencing_type = ifelse(grepl("POOL", Sample), "pooled", "single"), condition = "biofilm", strain = "gv2", supp = ifelse(grepl("CFS", Sample), "CFS", "Nil")) %>% filter(Sample != "aGV2_ancestral_Aug_21_S57")
+
+##put everything together, edit the names of the samples to remove the "POOL" 
+gv <- rbind(plank2, bf2, plank1, bf1)
+gv <- gv %>% mutate(Sample = gsub("PO(OL)*_S[0-9]+|_S[0-9]+", "", `Sample`))
+gv$Sample <- as.factor(gv$Sample)
+
+#gather into key value pairs of each statistic, td, pi, theta 
+gv_gathered <- gv %>% gather(key = statistic, value = value, tajimasD, pi, theta)
+
+##remove outlier
+no_outlier <- gv %>% filter(tajimasD < 1.7)
+
+##filter conditions 
+biofilm_only <- no_outlier %>% filter(condition == "biofilm")
+plank_only <- no_outlier %>% filter(condition == "planktonic")
+gv2 <- filter(no_outlier, strain == "gv2")
+gv14 <- filter(no_outlier, strain == "14018")
+
+pooled_only <- no_outlier %>% filter(sequencing_type == "pooled")
+single_only <- no_outlier %>% filter(sequencing_type == "single")
+
+```
+
+```{r, echo=FALSE}
+##plotting the data with the outlier removed.
+tdPlot <- ggplot(no_outlier, aes(condition, tajimasD, color= condition)) + geom_boxplot() + theme_bw() + geom_point() + stat_compare_means(paired= FALSE) + facet_wrap(~strain) + ggtitle("tajimasD") + ylim(-2, 0) + theme(legend.position = "none")
+
+piPlot <- ggplot(no_outlier, aes(condition, pi, color= condition)) + geom_boxplot() + theme_bw() + geom_point() + stat_compare_means(paired= FALSE) + facet_wrap(~strain) + scale_y_log10() + ggtitle("pi") + theme(text = element_text(size = 16), axis.title.x = element_blank(), legend.position = "none") 
+
+ExportPlot(tdPlot, "tajimasD_Plot", height = 5, width = 7)
+ExportPlot(piPlot, "pi_Plot", height = 5, width = 7)
+```
+
+\newpage
+
+# Is there a difference in diversity between pooled and single sequenced populations?
+
+single sequenced populations have higher diversity in the planktonic
+condition and lower diversity in the biofilm condition.
+
+ 
+
+ 
+
+```{r, echo=FALSE}
+##dotplots showing the distribution of pi x tajimas D and the separation 
+ggplot(gv2, aes(pi, theta,  color= sequencing_type)) + geom_point() + theme_bw() + facet_wrap(~condition) + theme(text= element_text(size= 12)) + ggtitle("gv2")
+ggplot(gv14, aes(pi,  theta, color= sequencing_type)) + geom_point() + theme_bw() + facet_wrap(~condition) + theme(text= element_text(size= 12)) + ggtitle("14018") 
+```
+
+```{r, echo=FALSE, include=FALSE}
+##boxplots which run a wilcoxon test on the means
+ggplot(plank_only, aes(sequencing_type, pi, color = sequencing_type)) + geom_boxplot() + theme_bw() + facet_wrap(~strain) + stat_compare_means(paired= FALSE) + ggtitle("planktonic") + theme(legend.position = "none", text= element_text(size= 14)) + xlab("") + ylim(0, .00035)
+
+ggplot(biofilm_only, aes(sequencing_type, pi, color = sequencing_type))+ geom_boxplot() +  geom_point() + theme_bw() + facet_wrap(~strain) + stat_compare_means(paired= FALSE) + ggtitle("biofilm pi") + theme(legend.position = "none", text = element_text(size = 14)) + xlab("") + ylim(0, .00035)
+
+```
+
+
+# Comparing biofilm and planktonic growth of pooled and single sequencing data
+
+```{r, echo=FALSE}
+piPlot_poolSingle_gv2 <- ggplot(gv2, aes(sequencing_type, pi, color= condition)) + geom_boxplot() + facet_wrap(~strain) + theme_bw() + theme(axis.title.x = element_blank())
+
+ggplot(gv2, aes(sequencing_type, tajimasD, color= condition)) + geom_boxplot() + facet_wrap(~strain) + theme_bw() + theme(axis.title.x = element_blank())
+
+piPlot_poolSingle_gv14 <- ggplot(gv14, aes(sequencing_type, pi, color= condition)) + geom_boxplot() + facet_wrap(~strain) + theme_bw()  + theme(axis.title.x = element_blank())
+
+ggplot(gv14, aes(sequencing_type, tajimasD, color= condition)) + geom_boxplot() + facet_wrap(~strain) + theme_bw()  + theme(axis.title.x = element_blank())
+
+```
+
+# Summary of statistics
+
+```{r}
+
+summary(plank1) #14018 planktonic
+summary(bf1) #14018 biofilm
+
+summary(plank2) # gv2 planktonic
+summary(bf2) #gv2 biofilm
+
+```
+
+Export plots
+
+```{r, include=FALSE}
+#ExportPlot(no_outlier, "~/2023.05.08_popoolationStatsOut/no-outlier-plot", width= 6, height = 5)
+```
